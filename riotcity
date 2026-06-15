@@ -1,0 +1,302 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local Window = Rayfield:CreateWindow({
+   Name = "Riot Admin City",
+   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+   LoadingTitle = "Mak HUb",
+   LoadingSubtitle = "by James",
+   ShowText = "Rayfield", -- for mobile users to unhide Rayfield, change if you'd like
+   Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+
+   ToggleUIKeybind = "K", -- The keybind to toggle the UI visibility (string like "K" or Enum.KeyCode)
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, -- Prevents Rayfield from emitting warnings when the script has a version mismatch with the interface.
+
+   -- ScriptID = "sid_xxxxxxxxxxxx", -- Your Script ID from developer.sirius.menu — enables analytics, managed keys, and script hosting
+
+   ConfigurationSaving = {
+      Enabled = fALSE,
+      FolderName = nil, -- Create a custom folder for your hub/game
+      FileName = "cityhub"
+   },
+
+   Discord = {
+      Enabled = true, -- Prompt the user to join your Discord server if their executor supports it
+      Invite = "Kh54TnXtj", -- The Discord invite code, do not include Discord.gg/. E.g. Discord.gg/ABCD would be ABCD
+      RememberJoins = true -- Set this to false to make them join the Discord every time they load it up
+   },
+
+   KeySystem = true, -- Set this to true to use our key system
+   KeySettings = {
+      Title = "Riot City | Keys",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided", -- Use this to tell the user how to get a key
+      FileName = "riotkeys", -- It is recommended to use something unique, as other scripts using Rayfield may overwrite your key file
+      SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+      Key = {"v1"} -- List of keys that the system will accept, can be RAW file links (pastebin, github, etc.) or simple strings ("hello", "key22")
+   }
+})
+
+local MainTab = Window:CreateTab("Main")
+
+----------------------------------------------------
+-- TEAM COLOR
+----------------------------------------------------
+local function getColor(teamName)
+	if teamName == "Criminal" then
+		return Color3.fromRGB(255,0,0)
+	elseif teamName == "Cops" then
+		return Color3.fromRGB(0,0,255)
+	elseif teamName == "Inmate" then
+		return Color3.fromRGB(255,165,0)
+	else
+		return Color3.fromRGB(255,255,255)
+	end
+end
+
+----------------------------------------------------
+-- ESP SYSTEM
+----------------------------------------------------
+local ESP_ENABLED = false
+local ESP_CACHE = {}
+
+local function clearESP()
+	for _,objs in pairs(ESP_CACHE) do
+		for _,v in pairs(objs) do
+			if v then v:Destroy() end
+		end
+	end
+	table.clear(ESP_CACHE)
+end
+
+local function createESP(plr)
+	if plr == LocalPlayer then return end
+
+	local function apply(char)
+		if not ESP_ENABLED then return end
+
+		local color = getColor(plr.Team and plr.Team.Name or "")
+
+		-- FULL BODY COLOR
+		for _,part in pairs(char:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Color = color
+				part.Material = Enum.Material.Neon
+			end
+		end
+
+		-- WALL HIGHLIGHT
+		local highlight = Instance.new("Highlight")
+		highlight.FillColor = color
+		highlight.FillTransparency = 0.3
+		highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		highlight.Parent = char
+
+		-- NAME
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if not hrp then return end
+
+		local billboard = Instance.new("BillboardGui", hrp)
+		billboard.Size = UDim2.new(0,200,0,50)
+		billboard.StudsOffset = Vector3.new(0,3,0)
+		billboard.AlwaysOnTop = true
+
+		local text = Instance.new("TextLabel", billboard)
+		text.Size = UDim2.new(1,0,1,0)
+		text.BackgroundTransparency = 1
+		text.TextScaled = true
+		text.TextColor3 = Color3.new(1,1,1)
+		text.Text = plr.Name
+
+		-- LINE ESP
+		local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+		local beam,a0,a1
+
+		if myHRP then
+			a0 = Instance.new("Attachment", myHRP)
+			a1 = Instance.new("Attachment", hrp)
+
+			beam = Instance.new("Beam")
+			beam.Attachment0 = a0
+			beam.Attachment1 = a1
+			beam.Width0 = 0.2
+			beam.Width1 = 0.2
+			beam.Color = ColorSequence.new(color)
+			beam.Parent = char
+		end
+
+		ESP_CACHE[plr] = {highlight, billboard, beam, a0, a1}
+	end
+
+	if plr.Character then apply(plr.Character) end
+	plr.CharacterAdded:Connect(apply)
+end
+
+local function enableESP()
+	for _,p in ipairs(Players:GetPlayers()) do
+		createESP(p)
+	end
+end
+
+----------------------------------------------------
+-- ESP BUTTON
+----------------------------------------------------
+MainTab:CreateButton({
+	Name = "Toggle ESP",
+	Callback = function()
+		ESP_ENABLED = not ESP_ENABLED
+
+		if ESP_ENABLED then
+			enableESP()
+			Rayfield:Notify({Title="ESP",Content="ON",Duration=2})
+		else
+			clearESP()
+			Rayfield:Notify({Title="ESP",Content="OFF",Duration=2})
+		end
+	end
+})
+
+Players.PlayerAdded:Connect(function(p)
+	p.CharacterAdded:Connect(function()
+		if ESP_ENABLED then
+			task.wait(1)
+			createESP(p)
+		end
+	end)
+end)
+
+----------------------------------------------------
+-- FLY SYSTEM (PC + MOBILE + DS4)
+----------------------------------------------------
+local flying = false
+local flyConnection
+
+local function toggleFly()
+	local char = LocalPlayer.Character
+	if not char then return end
+
+	local root = char:FindFirstChild("HumanoidRootPart")
+	local hum = char:FindFirstChild("Humanoid")
+
+	if not root or not hum then return end
+
+	flying = not flying
+
+	if flying then
+		hum.PlatformStand = true
+
+		local bv = Instance.new("BodyVelocity", root)
+		bv.MaxForce = Vector3.new(9e9,9e9,9e9)
+
+		local bg = Instance.new("BodyGyro", root)
+		bg.MaxTorque = Vector3.new(9e9,9e9,9e9)
+
+		flyConnection = RunService.RenderStepped:Connect(function()
+			local cam = workspace.CurrentCamera
+			local move = Vector3.zero
+
+			-- KEYBOARD
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+
+			-- CONTROLLER
+			for _,input in pairs(UserInputService:GetGamepadState(Enum.UserInputType.Gamepad1)) do
+				if input.KeyCode == Enum.KeyCode.Thumbstick1 then
+					move += cam.CFrame.LookVector * -input.Position.Y
+					move += cam.CFrame.RightVector * input.Position.X
+				end
+			end
+
+			bv.Velocity = move.Magnitude > 0 and move.Unit * 80 or Vector3.zero
+			bg.CFrame = cam.CFrame
+		end)
+
+	else
+		hum.PlatformStand = false
+		if flyConnection then flyConnection:Disconnect() end
+
+		for _,v in pairs(root:GetChildren()) do
+			if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then
+				v:Destroy()
+			end
+		end
+	end
+end
+
+MainTab:CreateButton({
+	Name = "Toggle Fly",
+	Callback = toggleFly
+})
+
+----------------------------------------------------
+-- NOCLIP
+----------------------------------------------------
+local noclip = false
+
+MainTab:CreateButton({
+	Name = "Toggle Noclip",
+	Callback = function()
+		noclip = not noclip
+	end
+})
+
+RunService.Stepped:Connect(function()
+	if noclip then
+		local char = LocalPlayer.Character
+		if char then
+			for _,v in pairs(char:GetDescendants()) do
+				if v:IsA("BasePart") then
+					v.CanCollide = false
+				end
+			end
+		end
+	end
+end)
+
+----------------------------------------------------
+-- TELEPORT SYSTEM
+----------------------------------------------------
+local locations = {
+	Bank = Vector3.new(671,-8,-1255),
+	Jewelry = Vector3.new(353,-32,-1597),
+	Criminal = Vector3.new(300,12,-2824),
+	Mansion = Vector3.new(321,0,-2457),
+	GasStation = Vector3.new(838.3,-32.0,-455.4),
+	GunShop = Vector3.new(-162.6,-32.1,-1254.2),
+    CarDealer = Vector3.new(505.7,-32.2,-949.8)
+}
+
+for name,pos in pairs(locations) do
+	MainTab:CreateButton({
+		Name = ""..name,
+		Callback = function()
+			local char = LocalPlayer.Character
+			if char then
+				local hrp = char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					hrp.CFrame = CFrame.new(pos)
+				end
+			end
+		end
+	})
+end
+
+----------------------------------------------------
+-- DONE
+----------------------------------------------------
+Rayfield:Notify({
+   Title = "Loaded",
+   Content = "Command Panel Ready",
+   Duration = 5
+})
