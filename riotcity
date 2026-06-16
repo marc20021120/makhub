@@ -263,7 +263,40 @@ RunService.Stepped:Connect(function()
 		end
 	end
 end)
+----------------------------------------------------
+-- INFINITE JUMP
+----------------------------------------------------
+local infJumpEnabled = false
 
+function ToggleInfiniteJump()
+	infJumpEnabled = not infJumpEnabled
+
+	Rayfield:Notify({
+		Title = "Infinite Jump",
+		Content = infJumpEnabled and "ON" or "OFF",
+		Duration = 2
+	})
+end
+
+UserInputService.JumpRequest:Connect(function()
+	if infJumpEnabled then
+		local char = LocalPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum:ChangeState(Enum.HumanoidStateType.Jumping)
+			end
+		end
+	end
+end)
+
+-- BUTTON (THIS WAS MISSING)
+MainTab:CreateButton({
+	Name = "Toggle Infinite Jump",
+	Callback = ToggleInfiniteJump
+})
+
+local MainTab = Window:CreateTab("Teleport")
 ----------------------------------------------------
 -- TELEPORT SYSTEM
 ----------------------------------------------------
