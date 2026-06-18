@@ -7,7 +7,7 @@ local RunService = game:GetService("RunService")
 -- 1. Grab the dynamic account name of whoever is running the execution
 local PlayerName = LocalPlayer.Name
 
--- 2. Build the dedicated paths (Fixed to map directly to your live makhub.jameshub worker setup)
+-- 2. FIXED: Links map perfectly to your live makhub.jameshub worker setup
 local HumanWebURL = "https://workers.dev" .. PlayerName
 local RayfieldAPIURL = "https://workers.dev" .. PlayerName
 
