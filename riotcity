@@ -1,4 +1,4 @@
-local Rayfield = loadstring(game:HttpGet('https://githubusercontent.com'))()
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/marc20021120/makhub/refs/heads/main/jameshub'))()
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -8,7 +8,7 @@ local RunService = game:GetService("RunService")
 -- 1. Grab the dynamic account name of whoever is running the execution
 local PlayerName = LocalPlayer.Name
 
--- 2. Build the dedicated paths (passing the username so every player gets a unique key)
+-- 2. Build the dedicated paths (Fixed to map directly to your live broad-cake worker setup)
 local HumanWebURL = "https://workers.dev" .. PlayerName
 local RayfieldAPIURL = "https://workers.dev" .. PlayerName
 
