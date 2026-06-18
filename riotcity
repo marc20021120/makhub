@@ -5,19 +5,19 @@ local LocalPlayer = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
--- Fetch the unique username of whoever executed the script
+-- 1. Grab the dynamic account name of whoever is running the execution
 local PlayerName = LocalPlayer.Name
 
--- Base URL configured to pass their unique account name down to your server logic
-local HumanURL = "https://workers.dev" .. PlayerName
-local RayfieldURL = "https://workers.dev" .. PlayerName
+-- 2. Build the dedicated paths (passing the username so every player gets a unique key)
+local HumanWebURL = "https://workers.dev" .. PlayerName
+local RayfieldAPIURL = "https://workers.dev" .. PlayerName
 
--- Android & PC clipboard system fallback block logic
+-- 3. Clipboard configuration logic for instant processing
 if setclipboard then
-    setclipboard(HumanURL)
+    setclipboard(HumanWebURL)
     Rayfield:Notify({
         Title = "Key Link Copied!",
-        Content = "Your personal web link was copied. Paste it into your browser to unlock!",
+        Content = "Your unique player webpage link was copied! Paste it in Chrome to grab your personalized key.",
         Duration = 7.0,
         Image = 4483362458,
     })
@@ -37,7 +37,7 @@ local Window = Rayfield:CreateWindow({
    DisableBuildWarnings = false, 
 
    ConfigurationSaving = {
-      Enabled = fALSE,
+      Enabled = fALSE, -- Left exactly as your original file configuration
       FolderName = nil, 
       FileName = "cityhub"
    },
@@ -51,20 +51,12 @@ local Window = Rayfield:CreateWindow({
    KeySystem = true, 
    KeySettings = {
       Title = "Riot City | Keys",
-      Subtitle = "Account: " .. PlayerName,
-      Note = "Android Users: Use the built-in 'Get Key' button below to copy your link!", 
+      Subtitle = "Account ID: " .. PlayerName,
+      Note = "The link to get your personal random key has been copied to your clipboard!", 
       FileName = "riotkeys", 
       SaveKey = true, 
       GrabKeyFromSite = true, 
-      Key = {RayfieldURL},
-      Actions = {
-          -- Native Rayfield action handler that links to the 'Get Key' touch element button
-          ["Get Key"] = function()
-              if setclipboard then
-                  setclipboard(HumanURL)
-              end
-          end
-      }
+      Key = {RayfieldAPIURL} -- Points directly to the raw player parameter filter configuration
    }
 })
 
