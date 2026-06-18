@@ -8,7 +8,7 @@ local RunService = game:GetService("RunService")
 -- 1. Grab the dynamic account name of whoever is running the execution
 local PlayerName = LocalPlayer.Name
 
--- 2. Build the dedicated paths (Fixed to map directly to your live broad-cake worker setup)
+-- 2. Build the dedicated paths linked to your active broad-cake worker setup
 local HumanWebURL = "https://workers.dev" .. PlayerName
 local RayfieldAPIURL = "https://workers.dev" .. PlayerName
 
@@ -17,10 +17,23 @@ if setclipboard then
     setclipboard(HumanWebURL)
     Rayfield:Notify({
         Title = "Key Link Copied!",
-        Content = "Your unique player webpage link was copied! Paste it in Chrome to grab your personalized key.",
+        Content = "Your unique player webpage link was copied! Paste it in Chrome if it didn't open automatically.",
         Duration = 7.0,
         Image = 4483362458,
     })
+end
+
+-- 4. AUTOMATIC BROWSER OPENER: Automatically opens Chrome/Safari straight to your link
+local requestFunc = syn and syn.request or http and http.request or http_request or request
+if requestFunc then
+    pcall(function()
+        requestFunc({
+            Url = "http://localhost:1111/open?url=" .. game:GetService("HttpService"):UrlEncode(HumanWebURL),
+            Method = "GET"
+        })
+    end)
+elseif market and market.open_browser then
+    pcall(function() market.open_browser(HumanWebURL) end)
 end
 
 local Window = Rayfield:CreateWindow({
