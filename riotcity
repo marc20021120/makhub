@@ -422,6 +422,94 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
+----------------------------------------------------
+-- LASER SYSTEM REMOVER / RESTORER
+----------------------------------------------------
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local laserActive = false
+local laserConnection
+local originalLaserData = {} -- Stores real laser values for perfect restoration
+
+local function toggleLaserSystem()
+	laserActive = not laserActive
+	
+	-- Display a responsive notification pop-up matching your Infinite Jump style
+	Rayfield:Notify({
+		Title = "Laser System",
+		Content = laserActive and "Lasers Removed (SAFE)" or "Lasers Restored (LETHAL)",
+		Duration = 2
+	})
+	
+	if laserActive then
+		-- ========================================================
+		-- ACTIVATED STATE: REMOVE ALL WORLD MAP LASERS
+		-- ========================================================
+		laserConnection = RunService.Heartbeat:Connect(function()
+			for _, obj in pairs(Workspace:GetDescendants()) do
+				if obj:IsA("BasePart") then
+					local color = obj.Color
+					-- Detect lasers by Neon material + Red/Orange spectrum signature
+					local isGlowingBeam = obj.Material == Enum.Material.Neon and (color.R > 0.6 and color.B < 0.4)
+					
+					if isGlowingBeam or string.find(string.lower(obj.Name), "laser") or obj.Name == "Bar" or obj.Name == "Sec" then
+						pcall(function()
+							-- Cache original structural properties before changing them
+							if not originalLaserData[obj] then
+								originalLaserData[obj] = {
+									Size = obj.Size,
+									Transparency = obj.Transparency,
+									CanCollide = obj.CanCollide
+								}
+							end
+							
+							-- Strip physics properties completely
+							obj.CanCollide = false
+							obj.Transparency = 1 
+							obj.Size = Vector3.new(0, 0, 0) 
+							
+							-- Destroy damage touch listener loop
+							local transmitter = obj:FindFirstChildOfClass("TouchTransmitter")
+							if transmitter then transmitter:Destroy() end
+						end)
+					end
+				end
+			end
+		end)
+	else
+		-- ========================================================
+		-- DEACTIVATED STATE: RESTORE ORIGINAL LASERS & DAMAGE
+		-- ========================================================
+		if laserConnection then laserConnection:Disconnect() end
+		
+		for obj, data in pairs(originalLaserData) do
+			pcall(function()
+				if obj and obj.Parent then
+					-- Force snap properties back to original world positions
+					obj.Size = data.Size
+					obj.Transparency = data.Transparency
+					obj.CanCollide = data.CanCollide
+					
+					-- Re-inject a functional TouchTransmitter to reactivate player damage
+					local dummyPart = Instance.new("Part")
+					local newTransmitter = Instance.new("TouchTransmitter", dummyPart)
+					newTransmitter.Parent = obj
+					dummyPart:Destroy()
+				end
+			end)
+		end
+		-- Empty the restoration table buffer
+		table.clear(originalLaserData)
+	end
+end
+
+-- BUTTON FOR LASERS (THIS IS NOW ADDED TO YOUR MAINTAB)
+MainTab:CreateButton({
+	Name = "Toggle All Lasers",
+	Callback = toggleLaserSystem
+})
+
 local MainTab = Window:CreateTab("Teleport")
 ----------------------------------------------------
 -- TELEPORT SYSTEM
