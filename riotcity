@@ -8,8 +8,8 @@ local RunService = game:GetService("RunService")
 local PlayerName = LocalPlayer.Name
 
 -- 2. FIXED: Links map perfectly to your live makhub.jameshub worker setup
-local HumanWebURL = "https://workers.dev" .. PlayerName
-local RayfieldAPIURL = "https://workers.dev" .. PlayerName
+local HumanWebURL = "https://makhub.jameshub.workers.dev/" .. PlayerName
+local RayfieldAPIURL = "https://makhub.jameshub.workers.dev/" .. PlayerName
 
 -- 3. Clipboard configuration logic for instant processing
 if setclipboard then
@@ -66,7 +66,7 @@ local Window = Rayfield:CreateWindow({
       Subtitle = "Account ID: " .. PlayerName,
       Note = "The link to get your personal random key has been opened and copied!", 
       FileName = "riotkeys", 
-      SaveKey = true, 
+      SaveKey = false, 
       GrabKeyFromSite = true, 
       Key = {RayfieldAPIURL} 
    }
