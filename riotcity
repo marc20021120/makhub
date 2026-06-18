@@ -510,6 +510,84 @@ MainTab:CreateButton({
 	Callback = toggleLaserSystem
 })
 
+
+----------------------------------------------------
+-- EXCLUSIVE GOD MODE & DAMAGE IMMUNITY ENGINE
+----------------------------------------------------
+local godModeActive = false
+local godModeConnection
+
+local function toggleGodMode()
+	godModeActive = not godModeActive
+	
+	-- Display a responsive notification pop-up matching your menu style
+	if Rayfield and Rayfield.Notify then
+		Rayfield:Notify({
+			Title = "God Mode System",
+			Content = godModeActive and "Total Damage Immunity: ON" or "Damage Immunity: OFF",
+			Duration = 2
+		})
+	end
+	
+	if godModeActive then
+		-- Runs constantly on every physics tick strictly on your local player character model
+		godModeConnection = game:GetService("RunService").Heartbeat:Connect(function()
+			local player = game:GetService("Players").LocalPlayer
+			local char = player.Character
+			
+			if char then
+				local hum = char:FindFirstChildOfClass("Humanoid")
+				
+				if hum and hum.Health > 0 then
+					pcall(function()
+						-- 1. HARDWARE FORCEFIELD SYNC (Bypasses gun bullets and punches)
+						local shield = char:FindFirstChildOfClass("ForceField")
+						if not shield then
+							local newShield = Instance.new("ForceField")
+							newShield.Name = "TotalImmunityBarrier"
+							newShield.Visible = true
+							newShield.Parent = char
+						end
+						
+						-- 2. ACTIVE HEALTH REJUVENATION MATRIX (The Ultimate Fix)
+						-- Instantly forces health to max if self-blast radius or fall damage triggers
+						if hum.Health < hum.MaxHealth then
+							hum.Health = hum.MaxHealth
+						end
+						
+						-- 3. INTERCEPT DEATH TRANSITIONS
+						-- Temporarily forces state properties to avoid structural ragdoll flags
+						if hum:GetState() == Enum.HumanoidStateType.Dead then
+							hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+						end
+					end)
+				end
+			end
+		end)
+	else
+		-- DEACTIVATED STATE: Safely disconnect memory loops and restore normal features
+		if godModeConnection then godModeConnection:Disconnect() end
+		
+		pcall(function()
+			local char = game:GetService("Players").LocalPlayer.Character
+			if char then
+				-- Strip structural barrier objects cleanly from your character
+				for _, obj in pairs(char:GetChildren()) do
+					if obj:IsA("ForceField") then
+						obj:Destroy()
+					end
+				end
+			end
+		end)
+	end
+end
+
+-- ✅ RAYFIELD BUTTON MOUNT (Adds the button directly to your menu tab)
+MainTab:CreateButton({
+	Name = "Toggle Infinite Health / GodMode",
+	Callback = toggleGodMode
+})
+
 local MainTab = Window:CreateTab("Teleport")
 ----------------------------------------------------
 -- TELEPORT SYSTEM
