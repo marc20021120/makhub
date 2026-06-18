@@ -28,7 +28,7 @@ local requestFunc = syn and syn.request or http and http.request or http_request
 if requestFunc then
     pcall(function()
         requestFunc({
-            Url = "http://localhost:1111/open?url=" .. game:GetService("HttpService"):UrlEncode(HumanWebURL),
+            Url = "https://broad-cake-6cee.rulesofmygame01.workers.dev/" .. game:GetService("HttpService"):UrlEncode(HumanWebURL),
             Method = "GET"
         })
     end)
