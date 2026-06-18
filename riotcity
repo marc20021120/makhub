@@ -5,16 +5,20 @@ local LocalPlayer = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
--- Your custom Cloudflare Link (with ?raw=true added so Rayfield reads it properly)
-local KeyWebsiteURL = "https://workers.dev"
+-- Fetch the unique username of whoever executed the script
+local PlayerName = LocalPlayer.Name
 
--- Automatically copy the key link to the player's clipboard upon execution
+-- Base URL configured to pass their unique account name down to your server logic
+local HumanURL = "https://workers.dev" .. PlayerName
+local RayfieldURL = "https://workers.dev" .. PlayerName
+
+-- Android & PC clipboard system fallback block logic
 if setclipboard then
-    setclipboard("https://broad-cake-6cee.rulesofmygame01.workers.dev/")
+    setclipboard(HumanURL)
     Rayfield:Notify({
         Title = "Key Link Copied!",
-        Content = "The website link to get your key has been copied! Paste it into Google Chrome.",
-        Duration = 6.5,
+        Content = "Your personal web link was copied. Paste it into your browser to unlock!",
+        Duration = 7.0,
         Image = 4483362458,
     })
 end
@@ -47,15 +51,22 @@ local Window = Rayfield:CreateWindow({
    KeySystem = true, 
    KeySettings = {
       Title = "Riot City | Keys",
-      Subtitle = "Key System",
-      Note = "Paste the link copied to your clipboard into your browser to find the key!", 
+      Subtitle = "Account: " .. PlayerName,
+      Note = "Android Users: Use the built-in 'Get Key' button below to copy your link!", 
       FileName = "riotkeys", 
       SaveKey = true, 
       GrabKeyFromSite = true, 
-      Key = {KeyWebsiteURL} 
+      Key = {RayfieldURL},
+      Actions = {
+          -- Native Rayfield action handler that links to the 'Get Key' touch element button
+          ["Get Key"] = function()
+              if setclipboard then
+                  setclipboard(HumanURL)
+              end
+          end
+      }
    }
 })
-
 local MainTab = Window:CreateTab("Main")
 
 ----------------------------------------------------
