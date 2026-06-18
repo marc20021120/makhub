@@ -7,11 +7,11 @@ local RunService = game:GetService("RunService")
 
 local Window = Rayfield:CreateWindow({
    Name = "Riot Admin City",
-   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+   Icon = 1, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
    LoadingTitle = "Mak HUb",
    LoadingSubtitle = "by James",
-   ShowText = "Rayfield", -- for mobile users to unhide Rayfield, change if you'd like
-   Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+   ShowText = "MakHUb", -- for mobile users to unhide Rayfield, change if you'd like
+   Theme = "Ocean", -- Check https://docs.sirius.menu/rayfield/configuration/themes
 
    ToggleUIKeybind = "K", -- The keybind to toggle the UI visibility (string like "K" or Enum.KeyCode)
 
@@ -296,6 +296,105 @@ MainTab:CreateButton({
 	Callback = ToggleInfiniteJump
 })
 
+---------------------------------------------------
+---------WalkSpeed
+---------------------------------------------------
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+local speedActive = false
+local currentSpeed = 100 -- Default speed number ready to type over
+local speedConnection
+local walkspeedToggleElement -- Reference to the toggle UI to update it visually
+
+-- Core loop function that forces your walkspeed to update smoothly
+local function updateSpeedLoop()
+	if speedConnection then speedConnection:Disconnect() end
+
+	if speedActive then
+		speedConnection = RunService.RenderStepped:Connect(function()
+			local char = LocalPlayer.Character
+			if char then
+				local hum = char:FindFirstChildOfClass("Humanoid")
+				if hum and hum.WalkSpeed ~= currentSpeed then
+					hum.WalkSpeed = currentSpeed
+				end
+			end
+		end)
+	else
+		if speedConnection then speedConnection:Disconnect() end
+		local char = LocalPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum then 
+				hum.WalkSpeed = 16 -- Safely return to normal Roblox speed
+			end
+		end
+	end
+end
+
+-- Function to handle flipping the toggle when a key is pressed (PC Only)
+local function handleToggleSwitch(newState)
+	speedActive = newState
+	updateSpeedLoop()
+	
+	-- Visually flip the checkmark/dot inside the Rayfield UI layout if it exists
+	if walkspeedToggleElement and walkspeedToggleElement.Set then
+		walkspeedToggleElement:Set(speedActive)
+	end
+end
+
+-- Section container to keep the box and the switch locked in the same panel space
+local WalkSpeedSection = MainTab:CreateSection("WalkSpeed Control")
+
+-- 1. THE ADJUSTABLE TYPE BOX (Works on both PC and Android)
+MainTab:CreateInput({
+	Name = "Change WalkSpeed Number",
+	PlaceholderText = "100",
+	RemoveTextAfterFocusLost = false,
+	Callback = function(text)
+		local num = tonumber(text)
+		if num then
+			currentSpeed = num
+			if speedActive then
+				updateSpeedLoop()
+			end
+		else
+			if text == "" then
+				currentSpeed = 16
+				if speedActive then updateSpeedLoop() end
+			end
+		end
+	end
+})
+
+-- 2. THE UNIVERSAL SWITCH (Tap on Android, click on PC, or triggers via Keybind)
+walkspeedToggleElement = MainTab:CreateToggle({
+	Name = "Toggle Speed Switch (On / Off)",
+	CurrentValue = false,
+	Flag = "UniversalSpeedMasterFlag", 
+	Callback = function(Value)
+		speedActive = Value
+		updateSpeedLoop()
+	end
+})
+
+-- 3. THE PC KEYBIND DETECTOR (Completely hidden and bypassed on Android)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	-- Ignore keypresses if the player is busy typing numbers inside the menu or chatting
+	if gameProcessed then return end
+	
+	-- PC check: Only triggers if the device uses keyboard inputs
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		-- UPDATED: Keybind changed to 'Q'
+		if input.KeyCode == Enum.KeyCode.Q then 
+			handleToggleSwitch(not speedActive) -- Reverse the current active state
+		end
+	end
+end)
+
 local MainTab = Window:CreateTab("Teleport")
 ----------------------------------------------------
 -- TELEPORT SYSTEM
@@ -324,6 +423,93 @@ for name,pos in pairs(locations) do
 		end
 	})
 end
+
+local WeaponTab = Window:CreateTab("WeaponShop")
+
+local Players = game:GetService("Players")
+local localPlayer = Players.LocalPlayer
+
+-- 🔔 NOTIFICATION
+local function notify(title, text, time)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = time or 2
+        })
+    end)
+end
+
+-- SETTINGS
+local shopPos = Vector3.new(-163.0, -32.1, -1265.8)
+local busy = false
+
+-- 🔥 CLICK ALL EQUIP BUTTONS (MAIN FIX)
+local function equipAllFromUI()
+    local playerGui = localPlayer:WaitForChild("PlayerGui")
+    local equipped = 0
+
+    for _, obj in pairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextButton") then
+            if string.lower(obj.Text) == "equip" then
+                pcall(function()
+                    -- simulate button click
+                    for _, con in pairs(getconnections(obj.MouseButton1Click)) do
+                        con:Fire()
+                    end
+                    equipped += 1
+                    task.wait(0.1)
+                end)
+            end
+        end
+    end
+
+    return equipped
+end
+
+-- MAIN FUNCTION
+local function executeWarp()
+    if busy then return end
+
+    local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+
+    if not hrp then
+        notify("❌ Error", "Character not loaded", 3)
+        return
+    end
+
+    busy = true
+    notify("⚙️ Weapons", "Opening shop...", 1.5)
+
+    local oldCFrame = hrp.CFrame
+
+    -- TELEPORT TO SHOP
+    hrp.CFrame = CFrame.new(shopPos)
+    task.wait(0.6)
+
+    -- 🔥 EQUIP ALL FROM UI
+    local equipped = equipAllFromUI()
+
+    task.wait(0.3)
+
+    -- RETURN
+    hrp.CFrame = oldCFrame
+    busy = false
+
+    -- 🔔 RESULT
+    if equipped > 0 then
+        notify("🔔 Equipped", "Equipped "..equipped.." weapons", 3)
+    else
+        notify("⚠️ Failed", "No Equip buttons found", 3)
+    end
+end
+
+-- ✅ BUTTON
+WeaponTab:CreateButton({
+    Name = "Equip ALL Weapons",
+    Callback = executeWarp
+})
 
 ----------------------------------------------------
 -- DONE
