@@ -157,7 +157,26 @@ if not prompt and not useStudio then
 		create = function() end -- No-op fallback
 	}
 end
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
+local function toggleRayfieldUI()
+	-- simulate K press (same as your keybind)
+	VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.K, false, game)
+	task.wait()
+	VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.K, false, game)
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	-- 🎮 Controller support
+	if input.UserInputType == Enum.UserInputType.Gamepad1 then
+		if input.KeyCode == Enum.KeyCode.DPadDown then
+			toggleRayfieldUI()
+		end
+	end
+end)
 
 -- The function below provides a safe alternative for calling error-prone functions
 -- Especially useful for filesystem function (writefile, makefolder, etc.)
