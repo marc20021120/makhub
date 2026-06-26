@@ -936,7 +936,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 local function RejoinCurrentServer()
-	-- Display a responsive notification pop-up matching your Rayfield interface style
+	-- Responsive notification pop-up matching your Rayfield interface style
 	if Rayfield and Rayfield.Notify then
 		Rayfield:Notify({
 			Title = "Server System",
@@ -962,8 +962,9 @@ local function RejoinCurrentServer()
 	end
 end
 
--- ✅ RAYFIELD MAIN TAB REJOIN BUTTON MOUNT
-MainTab:CreateButton({
+-- ✅ UTILITY TAB REGISTRATION
+-- Note: Replace "UtilityTab" with whatever your script calls your Utility page variable!
+UtilityTab:CreateButton({
 	Name = "Rejoin Current Server",
 	Callback = RejoinCurrentServer
 })
