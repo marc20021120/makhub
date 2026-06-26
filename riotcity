@@ -72,7 +72,7 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
-local MainTab = Window:CreateTab("Main")
+local MainTab = Window:CreateTab("Main🏠")
 ----------------------------------------------------
 -- ESP SYSTEM
 ----------------------------------------------------
@@ -697,7 +697,7 @@ for name,pos in pairs(locations) do
 	})
 end
 
-local WeaponTab = Window:CreateTab("WeaponShop")
+local WeaponTab = Window:CreateTab("WeaponShop🔫")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -804,7 +804,7 @@ WeaponTab:CreateButton({
 --========================================================
 -- ✅ POLICE TAB (FIXED ONLY)
 --========================================================
-local PoliceTab = Window:CreateTab("Police")
+local PoliceTab = Window:CreateTab("Police🚨")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -925,6 +925,47 @@ PoliceTab:CreateInput({
 PoliceTab:CreateButton({
 	Name = "Toggle Auto Arrest",
 	Callback = runArrestCycle
+})
+local UtilityTab = Window:CreateTab("Utility⚙️")
+----------------------------------------------------
+-- INSTANT SAME-SERVER REJOIN UTILITY
+----------------------------------------------------
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+local function RejoinCurrentServer()
+	-- Display a responsive notification pop-up matching your Rayfield interface style
+	if Rayfield and Rayfield.Notify then
+		Rayfield:Notify({
+			Title = "Server System",
+			Content = "Rejoining current server... Please wait.",
+			Duration = 3
+		})
+	end
+	
+	-- Add a brief pause to allow the notification to display before disconnecting
+	task.wait(0.5)
+	
+	-- Check if running in a private server or a standard public world room
+	if game.PrivateServerId ~= "" and game.PrivateServerOwnerId ~= 0 then
+		-- Safely teleport back into your current VIP Private Server slot
+		pcall(function()
+			TeleportService:TeleportToPrivateServer(game.PlaceId, game.PrivateServerId, {LocalPlayer})
+		end)
+	else
+		-- Teleport back into the exact same Public instance using its unique Job ID
+		pcall(function()
+			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+		end)
+	end
+end
+
+-- ✅ RAYFIELD MAIN TAB REJOIN BUTTON MOUNT
+MainTab:CreateButton({
+	Name = "Rejoin Current Server",
+	Callback = RejoinCurrentServer
 })
 
 ----------------------------------------------------
