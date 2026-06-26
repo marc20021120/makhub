@@ -425,126 +425,15 @@ end)
 ----------------------------------------------------
 -- LASER SYSTEM REMOVER / RESTORER
 ----------------------------------------------------
-local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
-local LaserActive = false
-local OriginalProperties = {}
-
--- Fast checker to verify if an object is a laser
-local function IsTargetLaser(obj)
-    if not obj:IsA("BasePart") then return false end
-    
-    local name = string.lower(obj.Name)
-    local color = obj.Color
-    local isColorMatch = (color.R > 0.6 and color.B < 0.4)
-    
-    if name:find("laser") or name:find("beam") or name:find("kill") or name:find("hurt") or obj.Name == "Bar" or obj.Name == "Sec" or (obj.Material == Enum.Material.Neon and isColorMatch) then
-        return true
-    end
-    return false
-end
-
--- Fast-action bypass when your character comes into contact with a laser
-local function BypassLaser(obj)
-    if not LaserActive then return end
-    if not obj or not obj.Parent then return end
-    
-    pcall(function()
-        -- 1. Wipe out any TouchTransmitters immediately before they process damage
-        local transmitter = obj:FindFirstChildOfClass("TouchTransmitter")
-        if transmitter then 
-            transmitter:Destroy() 
-        end
-        
-        -- 2. Cache original properties safely if not already recorded
-        if not OriginalProperties[obj] then
-            OriginalProperties[obj] = {
-                Transparency = obj.Transparency,
-                CanCollide = obj.CanCollide,
-                CanTouch = obj.CanTouch,
-                Size = obj.Size
-            }
-        end
-
-        -- 3. Strip physical and damage boundaries instantly
-        obj.Transparency = 1
-        obj.CanCollide = false
-        obj.CanTouch = false
-        obj.Size = Vector3.new(0.001, 0.001, 0.001)
-
-        -- 4. Turn off internal visual effects nested inside the part
-        for _, child in ipairs(obj:GetDescendants()) do
-            if child:IsA("Beam") or child:IsA("Trail") or child:IsA("ParticleEmitter") then
-                if not OriginalProperties[child] then
-                    OriginalProperties[child] = { Enabled = child.Enabled }
-                end
-                child.Enabled = false
-            end
-        end
-    end)
-end
-
--- Restore a single laser to normal gameplay settings when toggled OFF
-local function RestoreLaser(obj, data)
-    pcall(function()
-        if not obj or not obj.Parent then return end
-        if obj:IsA("BasePart") then
-            obj.Transparency = data.Transparency
-            obj.CanCollide = data.CanCollide
-            obj.CanTouch = data.CanTouch
-            obj.Size = data.Size
-            
-            -- Re-inject local touch tracking components
-            local dummy = Instance.new("Part")
-            local tx = Instance.new("TouchTransmitter", dummy)
-            tx.Parent = obj
-            dummy:Destroy()
-        elseif data.Enabled ~= nil then
-            obj.Enabled = data.Enabled
-        end
-    end)
-end
-
--- Handles global state recovery when the GUI button turns off
-local function GlobalRestore()
-    for obj, data in pairs(OriginalProperties) do
-        RestoreLaser(obj, data)
-    end
-    table.clear(OriginalProperties)
-end
-
--- ========================================================
--- LOW-LAG PHYSICAL INTERACTION CONNECTION
--- ========================================================
-local function ConnectCharacterTouch(char)
-    if not char then return end
-    char.DescendantAdded:Connect(function(part)
-        if part:IsA("BasePart") then
-            part.Touched:Connect(function(hit)
-                if LaserActive and IsTargetLaser(hit) then
-                    BypassLaser(hit)
-                end
-            end)
-        end
-    end)
-    
-    for _, part in ipairs(char:GetChildren()) do
-        if part:IsA("BasePart") then
-            part.Touched:Connect(function(hit)
-                if LaserActive and IsTargetLaser(hit) then
-                    BypassLaser(hit)
-                end
-            end)
-        end
-    end
-end
-
-LocalPlayer.CharacterAdded:Connect(ConnectCharacterTouch)
-if LocalPlayer.Character then ConnectCharacterTouch(LocalPlayer.Character) end
+local laserActive = false
+local laserConnection
+local originalLaserData = {} -- Stores real laser values for perfect restoration
 
 -- ========================================================
 -- SINGLE FLOATING TOGGLE BUTTON GUI ONLY
@@ -553,15 +442,16 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MinimalLaserBypass_UI"
 ScreenGui.ResetOnSpawn = false
 
+-- Safe wrapper fallback injection into CoreGui or PlayerGui
 local success = pcall(function() ScreenGui.Parent = CoreGui end)
 if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- Interactive Action Switch Button (Functions directly as the main frame)
+-- Interactive Action Switch Button (Functions directly as the draggable frame)
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Size = UDim2.new(0, 180, 0, 40)
 ToggleButton.Position = UDim2.new(0.1, 0, 0.2, 0)
 ToggleButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60) -- Initial Off (Red)
-ToggleButton.Text = "LASERS: LETHAL (OFF)"
+ToggleButton.Text = "STATUS: LETHAL (OFF)"
 ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleButton.Font = Enum.Font.SourceSansBold
 ToggleButton.TextSize = 14
@@ -574,19 +464,80 @@ local ButtonCorner = Instance.new("UICorner")
 ButtonCorner.CornerRadius = UDim.new(0, 8)
 ButtonCorner.Parent = ToggleButton
 
--- Button Interaction Click Event Handling
-ToggleButton.MouseButton1Click:Connect(function()
-    LaserActive = not LaserActive
-    
-    if LaserActive then
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- Active (Green)
-        ToggleButton.Text = "LASERS: REMOVED (ON)"
-    else
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60) -- Inactive (Red)
-        ToggleButton.Text = "LASERS: LETHAL (OFF)"
-        GlobalRestore()
-    end
-end)
+-- ========================================================
+-- TOGGLE SYSTEM CORE
+-- ========================================================
+local function toggleLaserSystem()
+	laserActive = not laserActive
+	
+	if laserActive then
+		-- Update button to Active (Green)
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113) 
+		ToggleButton.Text = "STATUS: REMOVED (SAFE)"
+
+		-- ACTIVATED STATE: REMOVE ALL WORLD MAP LASERS VIA CONTINUOUS HEARTBEAT
+		laserConnection = RunService.Heartbeat:Connect(function()
+			for _, obj in pairs(Workspace:GetDescendants()) do
+				if obj:IsA("BasePart") then
+					local color = obj.Color
+					-- Detect lasers by Neon material + Red/Orange spectrum signature
+					local isGlowingBeam = obj.Material == Enum.Material.Neon and (color.R > 0.6 and color.B < 0.4)
+					
+					if isGlowingBeam or string.find(string.lower(obj.Name), "laser") or obj.Name == "Bar" or obj.Name == "Sec" then
+						pcall(function()
+							-- Cache original structural properties before changing them
+							if not originalLaserData[obj] then
+								originalLaserData[obj] = {
+									Size = obj.Size,
+									Transparency = obj.Transparency,
+									CanCollide = obj.CanCollide
+								}
+							end
+							
+							-- Strip physics properties completely
+							obj.CanCollide = false
+							obj.Transparency = 1 
+							obj.Size = Vector3.new(0, 0, 0) 
+							
+							-- Destroy damage touch listener loop
+							local transmitter = obj:FindFirstChildOfClass("TouchTransmitter")
+							if transmitter then transmitter:Destroy() end
+						end)
+					end
+				end
+			end
+		end)
+	else
+		-- Update button to Inactive (Red)
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60) 
+		ToggleButton.Text = "STATUS: LETHAL (OFF)"
+
+		-- DEACTIVATED STATE: RESTORE ORIGINAL LASERS & DAMAGE
+		if laserConnection then laserConnection:Disconnect() end
+		
+		for obj, data in pairs(originalLaserData) do
+			pcall(function()
+				if obj and obj.Parent then
+					-- Force snap properties back to original world positions
+					obj.Size = data.Size
+					obj.Transparency = data.Transparency
+					obj.CanCollide = data.CanCollide
+					
+					-- Re-inject a functional TouchTransmitter to reactivate player damage
+					local dummyPart = Instance.new("Part")
+					local newTransmitter = Instance.new("TouchTransmitter", dummyPart)
+					newTransmitter.Parent = obj
+					dummyPart:Destroy()
+				end
+			end)
+		end
+		-- Empty the restoration table buffer
+		table.clear(originalLaserData)
+	end
+end
+
+-- Wire up button click directly to the toggle function
+ToggleButton.MouseButton1Click:Connect(toggleLaserSystem)
 
 ----------------------------------------------------
 -- EXCLUSIVE GOD MODE & DAMAGE IMMUNITY ENGINE
