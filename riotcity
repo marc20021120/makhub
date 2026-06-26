@@ -74,46 +74,57 @@ local Window = Rayfield:CreateWindow({
 
 local MainTab = Window:CreateTab("Main")
 ----------------------------------------------------
--- TEAM COLOR
-----------------------------------------------------
-local function getColor(teamName)
-	if teamName == "Criminal" then
-		return Color3.fromRGB(255,0,0)
-	elseif teamName == "Cops" then
-		return Color3.fromRGB(0,0,255)
-	elseif teamName == "Inmate" then
-		return Color3.fromRGB(255,165,0)
-	else
-		return Color3.fromRGB(255,255,255)
-	end
-end
-
-----------------------------------------------------
 -- ESP SYSTEM
+----------------------------------------------------
+----------------------------------------------------
+-- SOLID TEAM-COLORED ESP, TRACERS & NAMETAGS
 ----------------------------------------------------
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local espActive = false
 local espConnection
 
--- Configuration Profiles
-local ESP_COLOR = Color3.fromRGB(0, 255, 120)    -- Neon Green outline for visibility
-local TRACER_COLOR = Color3.fromRGB(255, 255, 0) -- Yellow tracking vector lines
-local TRACER_ORIGIN = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y) -- Screen Bottom Center
+-- Global configurations matching your style rules
+_G.FriendColor = Color3.fromRGB(0, 120, 255)  -- Blue
+_G.EnemyColor = Color3.fromRGB(255, 0, 50)    -- Red
+_G.UseTeamColor = true
 
--- Active visual memory containers
-local ActiveHighlights = {}
+-- Active visual storage containers
+local ESP_Holder = Instance.new("Folder")
+ESP_Holder.Name = "Rayfield_Solid_ESP"
 local ActiveTracers = {}
 
--- Safely clear a specific player's ESP elements
-local function ClearPlayerESP(player)
-	if ActiveHighlights[player] then
-		pcall(function() ActiveHighlights[player]:Destroy() end)
-		ActiveHighlights[player] = nil
+-- Secure parent insertion wrapper
+local success = pcall(function() ESP_Holder.Parent = CoreGui end)
+if not success then ESP_Holder.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+-- Aggressive Color Scanner to force team coloring and prevent white fallbacks
+local function GetPlayerColor(player)
+	if _G.UseTeamColor then
+		if player.Team and player.Team:IsA("Team") then
+			return player.Team.TeamColor.Color
+		elseif player.TeamColor then
+			return player.TeamColor.Color
+		end
 	end
+	
+	-- Fallback to Friend/Enemy colors if Team properties fail
+	if player.Team == LocalPlayer.Team or player.TeamColor == LocalPlayer.TeamColor then
+		return _G.FriendColor
+	else
+		return _G.EnemyColor
+	end
+end
+
+-- Safely remove elements when player disconnects or dies
+local function ClearPlayerVisuals(player)
+	local pFolder = ESP_Holder:FindFirstChild(player.Name)
+	if pFolder then pFolder:Destroy() end
+	
 	if ActiveTracers[player] then
 		pcall(function()
 			ActiveTracers[player].Visible = false
@@ -123,90 +134,123 @@ local function ClearPlayerESP(player)
 	end
 end
 
--- Safely clear all tracked players globally
+-- Full cleanup function when toggled OFF
 local function ClearAllESP()
-	for player, _ in pairs(ActiveHighlights) do
-		ClearPlayerESP(player)
+	ESP_Holder:ClearAllChildren()
+	for player, _ in pairs(ActiveTracers) do
+		ClearPlayerVisuals(player)
 	end
-	table.clear(ActiveHighlights)
 	table.clear(ActiveTracers)
 end
 
--- Direct logic loop to process and draw targets
+-- Core layout drawing loop (Tied to frame ticks for 0% latency)
 local function ProcessESP()
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
 			local char = player.Character
 			local root = char and char:FindFirstChild("HumanoidRootPart")
+			local head = char and char:FindFirstChild("Head")
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
 			
-			if root and char:FindFirstChildOfClass("Humanoid") and char:FindFirstChildOfClass("Humanoid").Health > 0 then
-				-- ========================================================
-				-- 1. FULL-BODY WALL SILHOUETTE (HIGHLIGHT PIPELINE)
-				-- ========================================================
-				if not ActiveHighlights[player] then
-					local highlight = Instance.new("Highlight")
-					highlight.Name = "ESP_Silhouette_Matrix"
-					highlight.FillColor = ESP_COLOR
-					highlight.FillTransparency = 0.65 -- Transparent inside glow
-					highlight.OutlineColor = ESP_COLOR
-					highlight.OutlineTransparency = 0 -- Crisp hard outline through walls
-					highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Forces rendering behind buildings
-					highlight.Adornee = char
-					highlight.Parent = CoreGui -- Hidden safe rendering directory
-					
-					ActiveHighlights[player] = highlight
+			if root and head and hum and hum.Health > 0 then
+				local color = GetPlayerColor(player)
+				
+				-- Handle individual folder hierarchy creation
+				local pFolder = ESP_Holder:FindFirstChild(player.Name)
+				if not pFolder then
+					pFolder = Instance.new("Folder", ESP_Holder)
+					pFolder.Name = player.Name
 				end
 				
 				-- ========================================================
-				-- 2. VECTOR TRACER LINE DRAWING
+				-- 1. SOLID FULL-BODY HIGHLIGHT (Matches your green image exactly)
+				-- ========================================================
+				local highlight = pFolder:FindFirstChild("SolidHighlight")
+				if not highlight then
+					highlight = Instance.new("Highlight")
+					highlight.Name = "SolidHighlight"
+					highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+					highlight.FillTransparency = 0 -- 0 = Solid color block through buildings
+					highlight.OutlineTransparency = 0 -- Solid visible border line
+					highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- White hard border outline
+					highlight.Adornee = char
+					highlight.Parent = pFolder
+				end
+				highlight.FillColor = color
+				
+				-- ========================================================
+				-- 2. DYNAMIC OVERHEAD TEAM-COLORED NAMETAG
+				-- ========================================================
+				local nametag = pFolder:FindFirstChild("OverheadName")
+				if not nametag then
+					nametag = Instance.new("BillboardGui")
+					nametag.Name = "OverheadName"
+					nametag.Size = UDim2.new(0, 200, 0, 40)
+					nametag.AlwaysOnTop = true
+					nametag.StudsOffset = Vector3.new(0, 2.5, 0) -- Places text box right above character bounds
+					nametag.Adornee = head
+					
+					local textLabel = Instance.new("TextLabel", nametag)
+					textLabel.Name = "Tag"
+					textLabel.BackgroundTransparency = 1
+					textLabel.Size = UDim2.new(1, 0, 1, 0)
+					textLabel.TextSize = 14
+					textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+					textLabel.TextStrokeTransparency = 0.2
+					textLabel.Font = Enum.Font.SourceSansBold
+					textLabel.Parent = nametag
+					
+					nametag.Parent = pFolder
+				end
+				
+				-- Disable the standard default Roblox system text tags to prevent overlaps
+				hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+				nametag.Tag.Text = player.DisplayName or player.Name
+				nametag.Tag.TextColor3 = color -- Updates the text color frame-by-frame
+				
+				-- ========================================================
+				-- 3. TEAM-COLORED LINE TRACERS (Forced Realtime Color updates)
 				-- ========================================================
 				local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
 				
 				if onScreen then
 					if not ActiveTracers[player] then
-						-- Instantiate direct native Drawing pipeline (Supported by modern executors)
 						local line = Drawing.new("Line")
 						line.Thickness = 1.5
-						line.Color = TRACER_COLOR
 						line.Transparency = 1
 						ActiveTracers[player] = line
 					end
 					
 					local tracer = ActiveTracers[player]
-					tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y) -- Snap origin point dynamically
+					tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y) -- Screen Center Bottom Origin
 					tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+					tracer.Color = color -- Forced update here ensures line updates dynamically
 					tracer.Visible = true
 				else
-					if ActiveTracers[player] then
-						ActiveTracers[player].Visible = false
-					end
+					if ActiveTracers[player] then ActiveTracers[player].Visible = false end
 				end
 			else
-				-- Instantly wipe visuals if player dies or logs out
-				ClearPlayerESP(player)
+				ClearPlayerVisuals(player)
 			end
 		end
 	end
 end
 
+-- Rayfield Core Mounting Callbacks
 local function toggleESP()
 	espActive = not espActive
 	
-	-- Responsive notification pop-up matching your Rayfield interface style
 	if Rayfield and Rayfield.Notify then
 		Rayfield:Notify({
 			Title = "Visual Matrix System",
-			Content = espActive and "ESP & Player Tracers: ACTIVE" or "Sensory ESP Matrix: DISABLED",
+			Content = espActive and "Solid Team ESP & Tracers: ACTIVE" or "Sensory ESP Matrix: DISABLED",
 			Duration = 2
 		})
 	end
 	
 	if espActive then
-		-- Fire calculation loop tied directly to render engine ticks (Locks smooth positioning)
 		espConnection = RunService.RenderStepped:Connect(ProcessESP)
-		
-		-- Setup cleanup listener map dependencies
-		Players.PlayerRemoving:Connect(ClearPlayerESP)
+		Players.PlayerRemoving:Connect(ClearPlayerVisuals)
 	else
 		if espConnection then 
 			espConnection:Disconnect() 
@@ -216,12 +260,11 @@ local function toggleESP()
 	end
 end
 
--- ✅ RAYFIELD MAIN TAB ESP BUTTON MOUNT
+-- ✅ RAYFIELD BUTTON MOUNT CONNECTION
 MainTab:CreateButton({
 	Name = "Toggle Full-Body ESP & Tracers",
 	Callback = toggleESP
 })
-
 ----------------------------------------------------
 -- FLY SYSTEM (PC + MOBILE + DS4)
 ----------------------------------------------------
