@@ -426,16 +426,46 @@ end)
 -- LASER SYSTEM REMOVER / RESTORER
 ----------------------------------------------------
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 
 local laserActive = false
-local laserConnection
 local originalLaserData = {} -- Stores real laser values for perfect restoration
+local dynamicConnection -- Safely watches for new lasers streaming in
+
+-- Fast verification function to check if an object acts as a laser
+local function CleanLaserObject(obj)
+	if not obj:IsA("BasePart") then return end
+	
+	local name = string.lower(obj.Name)
+	local color = obj.Color
+	local isGlowingBeam = obj.Material == Enum.Material.Neon and (color.R > 0.6 and color.B < 0.4)
+	
+	if isGlowingBeam or name:find("laser") or name:find("beam") or obj.Name == "Bar" or obj.Name == "Sec" then
+		pcall(function()
+			-- Cache original structural properties before changing them
+			if not originalLaserData[obj] then
+				originalLaserData[obj] = {
+					Size = obj.Size,
+					Transparency = obj.Transparency,
+					CanCollide = obj.CanCollide
+				}
+			end
+			
+			-- Strip physics properties completely
+			obj.CanCollide = false
+			obj.Transparency = 1 
+			obj.Size = Vector3.new(0, 0, 0) 
+			
+			-- Destroy damage touch listener loop instantly
+			local transmitter = obj:FindFirstChildOfClass("TouchTransmitter")
+			if transmitter then transmitter:Destroy() end
+		end)
+	end
+end
 
 local function toggleLaserSystem()
 	laserActive = not laserActive
 	
-	-- Responsive notification pop-up matching your menu style
+	-- Display a responsive notification pop-up matching your Rayfield style
 	if Rayfield and Rayfield.Notify then
 		Rayfield:Notify({
 			Title = "Laser System",
@@ -446,44 +476,27 @@ local function toggleLaserSystem()
 	
 	if laserActive then
 		-- ========================================================
-		-- ACTIVATED STATE: REMOVE ALL WORLD MAP LASERS VIA REPEATING LOOP
+		-- ACTIVATED STATE: ONE-TIME SWEEP (ZERO LAG)
 		-- ========================================================
-		laserConnection = RunService.Heartbeat:Connect(function()
-			for _, obj in pairs(Workspace:GetDescendants()) do
-				if obj:IsA("BasePart") then
-					local color = obj.Color
-					-- Detect lasers by Neon material + Red/Orange spectrum signature
-					local isGlowingBeam = obj.Material == Enum.Material.Neon and (color.R > 0.6 and color.B < 0.4)
-					
-					if isGlowingBeam or string.find(string.lower(obj.Name), "laser") or obj.Name == "Bar" or obj.Name == "Sec" then
-						pcall(function()
-							-- Cache original structural properties before changing them
-							if not originalLaserData[obj] then
-								originalLaserData[obj] = {
-									Size = obj.Size,
-									Transparency = obj.Transparency,
-									CanCollide = obj.CanCollide
-								}
-							end
-							
-							-- Strip physics properties completely
-							obj.CanCollide = false
-							obj.Transparency = 1 
-							obj.Size = Vector3.new(0, 0, 0) 
-							
-							-- Destroy damage touch listener loop
-							local transmitter = obj:FindFirstChildOfClass("TouchTransmitter")
-							if transmitter then transmitter:Destroy() end
-						end)
-					end
-				end
+		-- Runs exactly once instead of 60 times a second, completely eliminating lag
+		for _, obj in pairs(Workspace:GetDescendants()) do
+			CleanLaserObject(obj)
+		end
+		
+		-- Watch for newly spawned lasers or map chunks streaming in
+		dynamicConnection = Workspace.DescendantAdded:Connect(function(descendant)
+			if laserActive then
+				CleanLaserObject(descendant)
 			end
 		end)
 	else
 		-- ========================================================
-		-- DEACTIVATED STATE: RESTORE ORIGINAL LASERS & DAMAGE
+		-- DEACTIVATED STATE: RESTORE ORIGINAL MAP STATE
 		-- ========================================================
-		if laserConnection then laserConnection:Disconnect() end
+		if dynamicConnection then 
+			dynamicConnection:Disconnect() 
+			dynamicConnection = nil
+		end
 		
 		for obj, data in pairs(originalLaserData) do
 			pcall(function()
@@ -506,7 +519,7 @@ local function toggleLaserSystem()
 	end
 end
 
--- ✅ CORRECT MAIN TAB MOUNT (Renders right into your layout)
+-- ✅ RAYFIELD MAIN TAB REGISTRATION
 MainTab:CreateButton({
 	Name = "Toggle All Lasers",
 	Callback = toggleLaserSystem
