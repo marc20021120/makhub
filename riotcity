@@ -425,112 +425,92 @@ end)
 ----------------------------------------------------
 -- LASER SYSTEM REMOVER / RESTORER
 ----------------------------------------------------
+local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
 
-local LocalPlayer = Players.LocalPlayer
-local godModeActive = false
-local godModeConnection
+local laserActive = false
+local laserConnection
+local originalLaserData = {} -- Stores real laser values for perfect restoration
 
--- ========================================================
--- SINGLE FLOATING TOGGLE BUTTON GUI ONLY
--- ========================================================
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MinimalGodMode_UI"
-ScreenGui.ResetOnSpawn = false
-
--- Safe wrapper fallback injection into CoreGui or PlayerGui
-local success = pcall(function() ScreenGui.Parent = CoreGui end)
-if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
-
--- Interactive Action Switch Button (Functions directly as the draggable frame)
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Size = UDim2.new(0, 200, 0, 40)
-ToggleButton.Position = UDim2.new(0.1, 0, 0.35, 0)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60) -- Initial Off (Red)
-ToggleButton.Text = "GODMODE: DISABLED (OFF)"
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.Font = Enum.Font.SourceSansBold
-ToggleButton.TextSize = 14
-ToggleButton.BorderSizePixel = 0
-ToggleButton.Active = true
-ToggleButton.Draggable = true -- Allows you to click and drag the button directly
-ToggleButton.Parent = ScreenGui
-
-local ButtonCorner = Instance.new("UICorner")
-ButtonCorner.CornerRadius = UDim.new(0, 8)
-ButtonCorner.Parent = ToggleButton
-
--- ========================================================
--- TOGGLE SYSTEM CORE
--- ========================================================
-local function toggleGodMode()
-	godModeActive = not godModeActive
+local function toggleLaserSystem()
+	laserActive = not laserActive
 	
-	if godModeActive then
-		-- Update button layout to Active (Green)
-		ToggleButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113) 
-		ToggleButton.Text = "GODMODE: IMMUNE (ON)"
-
-		-- Runs constantly on every physics tick strictly on your local player character model
-		godModeConnection = RunService.Heartbeat:Connect(function()
-			local char = LocalPlayer.Character
-			
-			if char then
-				local hum = char:FindFirstChildOfClass("Humanoid")
-				
-				if hum and hum.Health > 0 then
-					pcall(function()
-						-- 1. HARDWARE FORCEFIELD SYNC (Bypasses gun bullets and punches)
-						local shield = char:FindFirstChildOfClass("ForceField")
-						if not shield then
-							local newShield = Instance.new("ForceField")
-							newShield.Name = "TotalImmunityBarrier"
-							newShield.Visible = true
-							newShield.Parent = char
-						end
-						
-						-- 2. ACTIVE HEALTH REJUVENATION MATRIX (The Ultimate Fix)
-						if hum.Health < hum.MaxHealth then
-							hum.Health = hum.MaxHealth
-						end
-						
-						-- 3. INTERCEPT DEATH TRANSITIONS
-						if hum:GetState() == Enum.HumanoidStateType.Dead then
-							hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-						end
-					end)
-				end
-			end
-		end)
-	else
-		-- Update button layout to Inactive (Red)
-		ToggleButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60) 
-		ToggleButton.Text = "GODMODE: DISABLED (OFF)"
-
-		-- DEACTIVATED STATE: Safely disconnect memory loops and restore normal features
-		if godModeConnection then 
-			godModeConnection:Disconnect() 
-			godModeConnection = nil
-		end
-		
-		pcall(function()
-			local char = LocalPlayer.Character
-			if char then
-				-- Strip structural barrier objects cleanly from your character
-				for _, obj in pairs(char:GetChildren()) do
-					if obj:IsA("ForceField") then
-						obj:Destroy()
+	-- Responsive notification pop-up matching your menu style
+	if Rayfield and Rayfield.Notify then
+		Rayfield:Notify({
+			Title = "Laser System",
+			Content = laserActive and "Lasers Removed (SAFE)" or "Lasers Restored (LETHAL)",
+			Duration = 2
+		})
+	end
+	
+	if laserActive then
+		-- ========================================================
+		-- ACTIVATED STATE: REMOVE ALL WORLD MAP LASERS VIA REPEATING LOOP
+		-- ========================================================
+		laserConnection = RunService.Heartbeat:Connect(function()
+			for _, obj in pairs(Workspace:GetDescendants()) do
+				if obj:IsA("BasePart") then
+					local color = obj.Color
+					-- Detect lasers by Neon material + Red/Orange spectrum signature
+					local isGlowingBeam = obj.Material == Enum.Material.Neon and (color.R > 0.6 and color.B < 0.4)
+					
+					if isGlowingBeam or string.find(string.lower(obj.Name), "laser") or obj.Name == "Bar" or obj.Name == "Sec" then
+						pcall(function()
+							-- Cache original structural properties before changing them
+							if not originalLaserData[obj] then
+								originalLaserData[obj] = {
+									Size = obj.Size,
+									Transparency = obj.Transparency,
+									CanCollide = obj.CanCollide
+								}
+							end
+							
+							-- Strip physics properties completely
+							obj.CanCollide = false
+							obj.Transparency = 1 
+							obj.Size = Vector3.new(0, 0, 0) 
+							
+							-- Destroy damage touch listener loop
+							local transmitter = obj:FindFirstChildOfClass("TouchTransmitter")
+							if transmitter then transmitter:Destroy() end
+						end)
 					end
 				end
 			end
 		end)
+	else
+		-- ========================================================
+		-- DEACTIVATED STATE: RESTORE ORIGINAL LASERS & DAMAGE
+		-- ========================================================
+		if laserConnection then laserConnection:Disconnect() end
+		
+		for obj, data in pairs(originalLaserData) do
+			pcall(function()
+				if obj and obj.Parent then
+					-- Force snap properties back to original world positions
+					obj.Size = data.Size
+					obj.Transparency = data.Transparency
+					obj.CanCollide = data.CanCollide
+					
+					-- Re-inject a functional TouchTransmitter to reactivate player damage
+					local dummyPart = Instance.new("Part")
+					local newTransmitter = Instance.new("TouchTransmitter", dummyPart)
+					newTransmitter.Parent = obj
+					dummyPart:Destroy()
+				end
+			end)
+		end
+		-- Empty the restoration table buffer
+		table.clear(originalLaserData)
 	end
 end
 
--- Wire up button click directly to the toggle logic function
-ToggleButton.MouseButton1Click:Connect(toggleGodMode)
+-- ✅ CORRECT MAIN TAB MOUNT (Renders right into your layout)
+MainTab:CreateButton({
+	Name = "Toggle All Lasers",
+	Callback = toggleLaserSystem
+})
 
 ----------------------------------------------------
 -- EXCLUSIVE GOD MODE & DAMAGE IMMUNITY ENGINE
